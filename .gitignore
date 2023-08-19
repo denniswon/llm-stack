@@ -1,0 +1,4 @@
+.env
+chromadb
+.vscode
+.DS_Store
