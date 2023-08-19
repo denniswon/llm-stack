@@ -2,6 +2,9 @@ import os
 import pandas as pd
 import openai
 
+import chromadb
+from chromadb.utils import embedding_functions
+
 import tiktoken
 from scipy import spatial
 
@@ -40,14 +43,55 @@ def text_embedding(text) -> None:
     return response["data"][0]["embedding"]
 
 
-# Use a lambda function to add a new column to the data frame called embedding.
-df = df.assign(embedding=(df["text"].apply(lambda x: text_embedding(x))))
-print(df.head())
+# use the text_embedding function to convert the query’s phrase or sentence into the same embedding format that Chorma uses.
+openai_ef = embedding_functions.OpenAIEmbeddingFunction(
+    api_key=os.environ["OPENAI_API_KEY"],
+    model_name="text-embedding-ada-002"
+)
+
+client = chromadb.Client()
+collection = client.get_or_create_collection(
+    "oscars-2023", embedding_function=openai_ef)
+
+# convert the text column in the Pandas dataframe into a Python list that can be passed to Chroma.
+docs = df["text"].tolist()
+# we will convert the index column of the dataframe into a list of strings.
+# Since each document stored in Chroma also needs an id in the string format,
+ids = [str(x) for x in df.index.tolist()]
+
+collection.add(
+    documents=docs,
+    ids=ids
+)
 
 # Step 3 – Performing a Search to Retrieve Similar Text
+# gets all the nominations for the music category.
+vector = text_embedding("Nominations for music")
+results = collection.query(
+    query_embeddings=vector,
+    n_results=15,
+    include=["documents"]
+)
+# convert this list into one string that can provide context to the prompt.
+res = "\n".join(str(item) for item in results['documents'][0])
+
+prompt = f'```{res}```Based on the data in ```, answer who won the award for the original song'
+
+messages = [
+    {"role": "system", "content": "You answer questions about 95th Oscar awards."},
+    {"role": "user", "content": prompt}
+]
+response = openai.ChatCompletion.create(
+    model="gpt-3.5-turbo",
+    messages=messages,
+    temperature=0
+)
+response_message = response["choices"][0]["message"]["content"]
+
+print(response_message)
 
 # perform a cosine similarity search.
-# # Converts the query into embeddings and then compares it with each embedding available in the data frame.
+# Converts the query into embeddings and then compares it with each embedding available in the data frame.
 
 
 def strings_ranked_by_relatedness(
