@@ -43,6 +43,9 @@ def text_embedding(text) -> None:
     return response["data"][0]["embedding"]
 
 
+df = df.assign(embedding=(df["text"].apply(lambda x: text_embedding(x))))
+print(df.head())
+
 # use the text_embedding function to convert the query’s phrase or sentence into the same embedding format that Chorma uses.
 openai_ef = embedding_functions.OpenAIEmbeddingFunction(
     api_key=os.environ["OPENAI_API_KEY"],
@@ -177,5 +180,9 @@ def ask(
     return response_message
 
 
-print(ask('What was the nomination from Lady Gaga for the 95th Oscars?'))
+print('====================================================')
+print('1. What were the nominations for the music awards?')
 print(ask('What were the nominations for the music awards?'))
+print()
+print('2. What was the nomination from Lady Gaga for the 95th Oscars?')
+print(ask('What was the nomination from Lady Gaga for the 95th Oscars?'))
