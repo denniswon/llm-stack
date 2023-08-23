@@ -5,9 +5,6 @@ import openai
 import chromadb
 from chromadb.utils import embedding_functions
 
-import tiktoken
-from scipy import spatial
-
 from dotenv import load_dotenv
 
 load_dotenv()

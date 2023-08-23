@@ -5,32 +5,45 @@ import openai
 import chromadb
 from chromadb.utils import embedding_functions
 
-import tiktoken
-from scipy import spatial
-
 from dotenv import load_dotenv
+
+import requests
+import json
+
+from typing import Optional
 
 load_dotenv()
 openai.api_key = os.getenv('OPENAI_API_KEY')
+ABI_ENDPOINT = 'https://api.etherscan.io/api?module=contract&action=getabi&address='
 
 # Step 1 – Preparing the Dataset
 
-df = pd.read_csv('./data/oscars.csv')
-
-# Since we are most interested in awards related to 2023, let’s filter them and create a new Pandas dataframe.
-df = df.loc[df['year_ceremony'] == 2023]
-# also convert the category to lowercase while dropping the rows where the value of a film is blank.
-df = df.dropna(subset=['film'])
-df['category'] = df['category'].str.lower()
-df.head()
+df = pd.read_csv('./ethereumetl/contracts.csv')
 
 # add a new column to the data frame that has an entire sentence representing a nomination.
 # This complete sentence, when sent to GPT 3.5, enables it to find the facts within the context.
 
-df['text'] = df['name'] + ' got nominated under the category, ' + \
-    df['category'] + ', for the film ' + df['film'] + ' to win the award'
-df.loc[df['winner'] == False, 'text'] = df['name'] + ' got nominated under the category, ' + \
-    df['category'] + ', for the film ' + df['film'] + ' but did not win'
+df['text'] = 'Smart contract with address ' + df['address'] + \
+    ' has the bytecode of ' + df['bytecode']  # + '.' + \
+# ('' if df['is_erc20'] == False & df['is_erc721'] == False else
+#  ('\nthis contract is ' + 'erc20. ' if df['is_erc20'] == True else 'erc721. '))
+
+
+def fetch_abi(address) -> Optional[str]:
+    response = requests.get('%s%s' % (ABI_ENDPOINT, address))
+    response_json = response.json()
+    if (response_json['status'] != '1'):
+        return None
+    abi_json = json.loads(response_json['result'])
+    return json.dumps({"abi": abi_json}, indent=4, sort_keys=True)
+
+
+df = df.assign(abi=(df["address"].apply(lambda x: fetch_abi(x))))
+
+df.loc[df['abi'] != None, 'text'] = df['text'] + \
+    '\nThe contract abi is ' + df['abi']
+
+print(df.head())
 
 # Step 2 – Generate the Word Embeddings for the Dataset
 
@@ -75,10 +88,10 @@ results = collection.query(
 # convert this list into one string that can provide context to the prompt.
 res = "\n".join(str(item) for item in results['documents'][0])
 
-prompt = f'```{res}```Based on the data in ```, answer who won the award for the original song'
+prompt = f'```{res}```Based on the data in ```, answer what is the abi of contract for the given address'
 
 messages = [
-    {"role": "system", "content": "You answer questions about 95th Oscar awards."},
+    {"role": "system", "content": "You answer questions about abi of contract with address 0x6B175474E89094C44Da98b954EedeAC495271d0F"},
     {"role": "user", "content": prompt}
 ]
 response = openai.ChatCompletion.create(

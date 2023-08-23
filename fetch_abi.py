@@ -24,6 +24,7 @@ def __main__():
         exit(1)
 
     abi_json = json.loads(response_json['result'])
+    print(abi_json)
     result = json.dumps({"abi": abi_json}, indent=4, sort_keys=True)
 
     open(args.output, 'w').write(result)
